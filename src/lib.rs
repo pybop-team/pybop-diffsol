@@ -1,14 +1,21 @@
+pub(crate) mod error;
+pub(crate) mod config;
+pub(crate) mod problem;
+pub(crate) mod dense;
+pub(crate) mod sparse;
+
+pub(crate) use config::Config;
+pub(crate) use error::PyDiffsolError;
+pub(crate) use problem::Diffsol;
+pub(crate) use dense::DiffsolDense;
+pub(crate) use sparse::DiffsolSparse;
+
 use pyo3::prelude::*;
 
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
-}
-
-/// A Python module implemented in Rust.
 #[pymodule]
 fn pybop_diffsol(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    m.add_class::<DiffsolDense>()?;
+    m.add_class::<DiffsolSparse>()?;
+    m.add_class::<Config>()?;
     Ok(())
 }
