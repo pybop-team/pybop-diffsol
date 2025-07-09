@@ -9,9 +9,16 @@ if [ -f "/etc/debian_version" ]; then
     export LLVM_DIR=/usr/lib/llvm-17
     export LLVM_SYS_170_PREFIX=/usr/lib/llvm-17
 else
-    # must be AlmaLinux 8 
+    # must be AlmaLinux 8. You can install the llvm library with llvm-libs-17.0.6,
+    # but this doesn't come with llvm-config, so we have to build it from source. 
     yum update -y
-    yum -y install llvm-libs-17.0.6
+    git clone --depth 1 https://github.com/llvm/llvm-project
+    cd llvm-project
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ../llvm \
+          -DLLVM_ENABLE_PROJECTS="polly"
+    cmake --build .  --target install
     export LLVM_DIR=/usr/lib64
     export LLVM_SYS_170_PREFIX=/usr/lib64
 fi
