@@ -1,4 +1,4 @@
-!#/bin/bash
+#!/usr/bin/env bash
 if [ -f "/etc/debian_version" ]; then
     apt install -y wget
     wget https://apt.llvm.org/llvm.sh
