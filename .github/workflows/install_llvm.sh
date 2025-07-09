@@ -5,7 +5,7 @@ if [ -f "/etc/debian_version" ]; then
     wget https://apt.llvm.org/llvm.sh
     chmod +x llvm.sh
     ./llvm.sh 17
-    apt install -y libpolly-17-dev libzstd-dev
+    apt install -y libpolly-17-dev libzstd-dev libzstd1
     export LLVM_DIR=/usr/lib/llvm-17
     export LLVM_SYS_170_PREFIX=/usr/lib/llvm-17
 else
