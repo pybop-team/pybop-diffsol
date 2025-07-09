@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 if [ -f "/etc/debian_version" ]; then
     apt update
-    apt install -y wget lsb-release 
+    apt install -y wget lsb-release software-properties-common gnupg
     wget https://apt.llvm.org/llvm.sh
     chmod +x llvm.sh
     ./llvm.sh 17
