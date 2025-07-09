@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 if [ -f "/etc/debian_version" ]; then
     apt update
-    apt install -y wget
+    apt install -y wget lsb_release
     wget https://apt.llvm.org/llvm.sh
     chmod +x llvm.sh
     ./llvm.sh 17
@@ -14,5 +14,6 @@ else
     export LLVM_DIR=/usr/lib/clang/17
     export LLVM_SYS_170_PREFIX=/usr/lib/clang/17
 fi
+ls -l $LLVM_DIR
 
 
