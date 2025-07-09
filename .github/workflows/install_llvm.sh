@@ -11,7 +11,7 @@ if [ -f "/etc/debian_version" ]; then
 else
     # must be AlmaLinux 8 
     yum update -y
-    yum -y install llvm-devel-17.0.6 clang-devel-17.0.6 libzstd-devel zstd ncurses-devel zlib-devel python38-devel
+    yum -y install llvm-devel-17.0.6 clang-devel-17.0.6 libzstd-devel zstd ncurses-devel zlib-devel python38-devel libffi libffi-devel
     export LLVM_DIR=/usr
     export LLVM_SYS_170_PREFIX=/usr
 fi
