@@ -16,7 +16,7 @@ diffsol-llvm17 = ["diffsol/diffsl-llvm17", "diffsol-llvm"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-diffsol = { version = "0.6.3" }
+diffsol = { version = "0.6.4" }
 faer = "0.22.6"
 nalgebra = "0.33.2"
 numpy = "0.25.0"
