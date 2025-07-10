@@ -4,6 +4,9 @@ use diffsol::{error::DiffsolError, matrix::MatrixRef, DefaultDenseMatrix, DiffSl
 use numpy::{ndarray::{s, Array2}, PyArray2, PyReadonlyArray1, IntoPyArray};
 use pyo3::{Bound, Python};
 use crate::{Config, PyDiffsolError};
+#[cfg(feature = "diffsol-cranelift")]
+type CG = diffsol::CraneliftJitModule;
+#[cfg(feature = "diffsol-llvm")]
 type CG = diffsol::LlvmModule;
 
 
