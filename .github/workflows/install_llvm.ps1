@@ -1,6 +1,9 @@
+param (
+    [string]$DestinationFolder = "$PSScriptRoot\llvm"
+)
+
 # Define the URL and destination paths
 $url = "https://github.com/vovkos/llvm-package-windows/releases/download/llvm-17.0.6/llvm-17.0.6-windows-x86-msvc17-libcmt.7z"
-$destinationFolder = "$PSScriptRoot\llvm"
 $archivePath = "$destinationFolder\llvm.7z"
 
 # Create destination folder if it doesn't exist
