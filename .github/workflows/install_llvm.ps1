@@ -21,10 +21,12 @@ if (-not (Get-Command "7z" -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Extract the archive
+# Extract the archive in-place
 Write-Host "Extracting archive..."
-& 7z x $archivePath -o$DestinationFolder -y
+Push-Location -Path $DestinationFolder
+& 7z x "llvm.7z" -y
+Pop-Location
 
-# Print top-level contents of the destination directory
-Write-Host "`Top-level contents of: $DestinationFolder"
-Get-ChildItem -Path $DestinationFolder -Recurse
+# Print contents of the destination directory (now should work!)
+Write-Host "`nTop-level contents of: $DestinationFolder"
+Get-ChildItem -Path $DestinationFolder
