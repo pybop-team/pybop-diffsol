@@ -24,3 +24,4 @@ Write-Host "Extracting archive..."
 & $sevenZip x $archivePath -o$destinationFolder -y
 
 Write-Host "Done! Extracted to: $destinationFolder"
+Get-ChildItem -Path $destinationFolder
