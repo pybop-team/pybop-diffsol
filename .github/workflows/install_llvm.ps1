@@ -27,4 +27,4 @@ Write-Host "Extracting archive..."
 
 # Print top-level contents of the destination directory
 Write-Host "`nTop-level contents of: $DestinationFolder"
-Get-ChildItem -Path $DestinationFolder
+Get-ChildItem -Path $DestinationFolder -Recurse
