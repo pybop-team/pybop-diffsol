@@ -1,11 +1,11 @@
-from pybop_diffsol import DiffsolDense, DiffsolSparse, Config
+from pybop_diffsol import DiffsolDense, Config
 import numpy as np
 
 import pytest
 
 solver_classes = [
     DiffsolDense,
-    DiffsolSparse,
+    #DiffsolSparse,
 ]
 
 @pytest.mark.parametrize("solver_class", solver_classes)

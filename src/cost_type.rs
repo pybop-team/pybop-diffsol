@@ -1,4 +1,4 @@
-use pyo3::{prelude::*};
+use pyo3::prelude::*;
 
 #[pyclass]
 pub(crate) enum CostType {
