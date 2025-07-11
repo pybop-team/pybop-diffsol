@@ -1,4 +1,5 @@
-from pybop_diffsol import DiffsolDense, Config, CostType
+from pybop_diffsol import DiffsolDense, Config
+from pybop_diffsol import CostType
 import numpy as np
 import sys
 
