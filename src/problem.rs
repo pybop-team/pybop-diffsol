@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use diffsol::{error::DiffsolError, matrix::MatrixRef, DefaultDenseMatrix, DiffSl, LinearSolver, Matrix, OdeBuilder, OdeEquations, OdeSolverProblem, Vector, VectorHost, VectorRef, Op, OdeSolverMethod, NonLinearOp, NonLinearOpSens};
-use numpy::{ndarray::{s, Array1, Array2}, IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
+use numpy::{ndarray::{s, Array1, Array2}, IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyArrayMethods, PyUntypedArrayMethods};
 use pyo3::{Bound, Python};
 use crate::{Config, PyDiffsolError};
 #[cfg(feature = "diffsol-cranelift")]
@@ -16,7 +16,7 @@ where
     M::V: VectorHost
 {
     problem: Arc<Mutex<OdeSolverProblem<DiffSl<M, CG>>>>,
-    sigma: Some(f64),
+    sigma: Option<f64>,
 }
 
 impl<M> Diffsol<M> 
@@ -52,28 +52,28 @@ where
     }
     pub(crate) fn cost_negative_gaussian_log_likelihood_sens<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
         let sigma = self.sigma.ok_or_else(|| PyDiffsolError::new(DiffsolError::Other("Sigma must be set before computing cost".to_string())))?;
-        let f = |out, d| (out - d).powi(2);
+        let f = |out: f64, d: f64| (out - d).powi(2);
         let (cost, sens) = self.cost_sens::<LS, _, _>(_py, times, data, f, |out, d, out_sens, sens| {
             for (s, &os) in sens.iter_mut().zip(out_sens.as_slice().iter()) {
                 *s += 2.0 * (out - d) * os;
             }
         })?;
         let cost = -0.5 * (2.0 * std::f64::consts::PI).ln() * 2.0 - sigma.ln() - cost / (2.0 * sigma * sigma);
-        let sens = sens / (2.0 * sigma * sigma);
+        unsafe { sens.as_array_mut() }.iter_mut().for_each(|s| *s /= 2.0 * sigma * sigma);
         Ok((cost, sens))
     }
 
     /// Sum of power cost function: `C(x, y) = sum(|x - y|^p`
     pub(crate) fn cost_sum_of_power<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>, p: i32) -> Result<f64, PyDiffsolError> {
-        let f = |out, d| (out - d).abs().powi(p);
+        let f = |out: f64, d: f64| (out - d).abs().powi(p);
         self.cost::<LS, _>(_py, times, data, f)
     }
 
     pub(crate) fn cost_sum_of_power_sens<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>, p: i32) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
-        let f = |out, d| (out - d).abs().powi(p);
-        let fs = |out, d, out_sens, sens| {
-            for (s, &os) in sens.iter_mut().zip(out_sens.iter()) {
-                *s += p * (out - d).abs().powi(p - 1) * os;
+        let f = |out: f64, d: f64| (out - d).abs().powi(p);
+        let fs = |out: f64, d: f64, out_sens: &M::V, sens: &mut Array1<f64>| {
+            for (s, &os) in sens.iter_mut().zip(out_sens.as_slice().iter()) {
+                *s += (p as f64) * (out - d).abs().powi(p - 1) * os;
             }
         };
         self.cost_sens::<LS, _, _>(_py, times, data, f, fs)
@@ -81,14 +81,14 @@ where
 
     /// minkowski cost function: `C(x, y) = (sum(|x - y|^p))^(1/p)`
     pub(crate) fn cost_minkowski<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>, p: i32) -> Result<f64, PyDiffsolError> {
-        let cost = self.cost_sum_of_power(_py, times, data, p)?;
+        let cost = self.cost_sum_of_power::<LS>(_py, times, data, p)?;
         if cost == 0.0 {
             return Ok(0.0);
         }
         Ok(cost.powf(1.0 / p as f64))
     }
     pub(crate) fn cost_minkowski_sens<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>, p: i32) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
-        let (cost, sens) = self.cost_sum_of_power_sens(_py, times, data, p)?;
+        let (cost, sens) = self.cost_sum_of_power_sens::<LS>(_py, times, data, p)?;
         if cost == 0.0 {
             return Ok((0.0, sens));
         }
@@ -96,19 +96,19 @@ where
             return Ok((cost, sens)); // For p=1, the cost is already the sum of absolute differences
         }
         let pow_cost = cost.powf(1.0 / p as f64);
-        let sens = sens / (p as f64 * pow_cost);
+        unsafe { sens.as_array_mut() }.iter_mut().for_each(|s| *s /= p as f64 * pow_cost);
         Ok((pow_cost, sens))
     }
 
     /// Sum of squared errors cost function: `C(x, y) = (x - y)^2`
     pub(crate) fn cost_sum_squared_error<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<f64, PyDiffsolError> {
-        let f = |out, d| (out - d).powi(2);
+        let f = |out: f64, d: f64| (out - d).powi(2);
         self.cost::<LS, _>(_py, times, data, f)
     }
     pub(crate) fn cost_sum_squared_error_sens<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
-        let f = |out, d| (out - d).powi(2);
-        let fs = |out, d, out_sens, sens| {
-            for (s, &os) in sens.iter_mut().zip(out_sens.iter()) {
+        let f = |out: f64, d: f64| (out - d).powi(2);
+        let fs = |out: f64, d: f64, out_sens: &M::V, sens: &mut Array1<f64>| {
+            for (s, &os) in sens.iter_mut().zip(out_sens.as_slice().iter()) {
                 *s += 2.0 * (out - d) * os;
             }
         };
@@ -117,14 +117,15 @@ where
 
     /// Mean absolute error cost function: `C(x, y) = |x - y|`
     pub(crate) fn cost_mean_absolute_error<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<f64, PyDiffsolError> {
-        let f = |out, d| (out - d).abs();
-        self.cost::<LS, _>(_py, times, data, f) / 
-            times.len() as f64 // Normalize by number of data points
+        let f = |out: f64, d: f64| (out - d).abs();
+        let n = times.shape()[0];
+        let cost = self.cost::<LS, _>(_py, times, data, f)?;
+        Ok(cost / n as f64) // Normalize by number of data points
     }
     pub(crate) fn cost_mean_absolute_error_sens<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
-        let f = |out, d| (out - d).abs();
-        let fs = |out, d, out_sens, sens| {
-            for (s, &os) in sens.iter_mut().zip(out_sens.iter()) {
+        let f = |out: f64, d: f64| (out - d).abs();
+        let fs = |out: f64, d: f64, out_sens: &M::V, sens: &mut Array1<f64>| {
+            for (s, &os) in sens.iter_mut().zip(out_sens.as_slice().iter()) {
                 if out > d {
                     *s += os; // Positive difference
                 } else if out < d {
@@ -132,33 +133,39 @@ where
                 }
             }
         };
-        let (cost, sens) = self.cost_sens::<LS, _, _>(_py, times, data, f, fs);
-        Ok((cost / times.len() as f64, sens / times.len() as f64)) // Normalize by number of data points
+        let n = times.shape()[0];
+        let (cost, sens) = self.cost_sens::<LS, _, _>(_py, times, data, f, fs)?;
+        unsafe { sens.as_array_mut() }.iter_mut().for_each(|s| *s /= n as f64); // Normalize sensitivity by number of data points
+        Ok((cost / n as f64, sens)) // Normalize by number of data points
     }
 
     /// Mean squared error cost function: `C(x, y) = (x - y)^2`
     pub(crate) fn cost_mean_squared_error<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<f64, PyDiffsolError> {
-        self.cost_sum_squared_error(_py, times, data)? / times.len() as f64; // Normalize by number of data points
+        let n = times.shape()[0];
+        let cost = self.cost_sum_squared_error::<LS>(_py, times, data)?;
+        Ok(cost / n as f64) // Normalize by number of data points
     }
     pub(crate) fn cost_mean_squared_error_sens<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
-        let (cost, sens) = self.cost_sum_squared_error_sens(_py, times, data);
-        Ok((cost / times.len() as f64, sens / times.len() as f64)) // Normalize by number of data points
+        let n = times.shape()[0] as f64;
+        let (cost, sens) = self.cost_sum_squared_error_sens::<LS>(_py, times, data)?;
+        unsafe { sens.as_array_mut() }.iter_mut().for_each(|s| *s /= n); // Normalize sensitivity by number of data points
+        Ok((cost / n, sens)) // Normalize by number of data points
     }
 
 
     /// Root mean squared error cost function: `C(x, y) = sqrt(sum((x(p) - y)^2) / n)`
     /// sensitivity is  dC/p = 1/(2*sqrt(sum((x(p) - y)^2)/n)) * sum((x(p) - y)*dx/dp/n)
     pub(crate) fn cost_root_mean_squared_error<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<f64, PyDiffsolError> {
-        let cost = self.cost_mean_squared_error(_py, times, data)?;
+        let cost = self.cost_mean_squared_error::<LS>(_py, times, data)?;
         Ok(cost.sqrt())
     }
     pub(crate) fn cost_root_mean_squared_error_sens<'py, LS: LinearSolver<M>>(&mut self, _py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
-        let (cost, sens) = self.cost_mean_squared_error_sens(_py, times, data)?;
+        let (cost, sens) = self.cost_mean_squared_error_sens::<LS>(_py, times, data)?;
         if cost == 0.0 {
             return Ok((0.0, sens));
         }
         let sqrt_cost = cost.sqrt();
-        let sens = sens / (2.0 * sqrt_cost);
+        unsafe { sens.as_array_mut() }.iter_mut().for_each(|s| *s /= 2.0 * sqrt_cost); // Normalize sensitivity by 2*sqrt(cost)
         Ok((sqrt_cost, sens))
     }
 
@@ -181,7 +188,7 @@ where
         } else {
             None
         };
-        for (i, (&t, &d)) in times.iter().zip(data.iter()).enumerate() {
+        for (&t, &d) in times.iter().zip(data.iter()) {
             while solver.state().t < t {
                 solver.step()?;
             }
@@ -198,7 +205,7 @@ where
         Ok(cost)
     }
 
-    pub(crate) fn cost_sens<'py, LS: LinearSolver<M>, F: Fn(f64, f64) -> f64, FS: Fn(f64, f64, &M::V, &Array1<f64>)>(&mut self, py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>, f: F, fs: FS) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
+    pub(crate) fn cost_sens<'py, LS: LinearSolver<M>, F: Fn(f64, f64) -> f64, FS: Fn(f64, f64, &M::V, &mut Array1<f64>)>(&mut self, py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>, f: F, fs: FS) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
         let problem = self.problem.lock().map_err(|e| PyDiffsolError::new(DiffsolError::Other(e.to_string())))?;
         let times = times.as_array();
         let data = data.as_array();
@@ -220,7 +227,7 @@ where
         } else {
             None
         };
-        for (i, (&t, &d)) in times.iter().zip(data.iter()).enumerate() {
+        for (&t, &d) in times.iter().zip(data.iter()) {
             while solver.state().t < t {
                 solver.step()?;
             }

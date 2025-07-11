@@ -78,5 +78,6 @@ fn pybop_diffsol(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DiffsolDense>()?;
     m.add_class::<DiffsolSparse>()?;
     m.add_class::<Config>()?;
+    m.add_class::<CostType>()?;
     Ok(())
 }
