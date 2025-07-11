@@ -45,6 +45,7 @@ macro_rules! create_diffsol_class {
             }
 
 
+            #[cfg(feature = "diffsol-llvm")]
             #[pyo3(signature = (times, data, cost_type))]
             fn sens<'py>(&mut self, py: Python<'py>, times: PyReadonlyArray1<'py, f64>, data: PyReadonlyArray1<'py, f64>, cost_type: &CostType) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
                 match cost_type {
