@@ -46,7 +46,7 @@ jobs:
           set -e
           python3 -m venv .venv
           source .venv/bin/activate
-          pip install . --find-links dist --force-reinstall
+          pip install pybop-diffsol --find-links dist --force-reinstall
           pip install pytest
           pytest
       - name: pytest
@@ -62,7 +62,7 @@ jobs:
             pip3 install -U pip pytest
           run: |
             set -e
-            pip3 install . --find-links dist --force-reinstall
+            pip3 install pybop-diffsol --find-links dist --force-reinstall
             pytest
 
   windows:
@@ -96,7 +96,7 @@ jobs:
           set -e
           python3 -m venv .venv
           source .venv/Scripts/activate
-          pip install . -diffsol --find-links dist --force-reinstall
+          pip install pybop-diffsol --find-links dist --force-reinstall
           pip install pytest
           pytest
 
@@ -133,7 +133,7 @@ jobs:
           set -e
           python3 -m venv .venv
           source .venv/bin/activate
-          pip install . --find-links dist --force-reinstall
+          pip install pybop-diffsol --find-links dist --force-reinstall
           pip install pytest
           pytest
 
