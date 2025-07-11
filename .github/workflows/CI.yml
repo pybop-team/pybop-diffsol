@@ -120,8 +120,9 @@ jobs:
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
-          command: sdist
-          args: --out dist
+          args: --release --out dist --sdist
+      - name: Remove wheels, just keep sdist
+        run: rm -rf dist/*.whl
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
