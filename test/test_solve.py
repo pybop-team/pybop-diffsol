@@ -1,12 +1,13 @@
-from pybop_diffsol import DiffsolDense, Config
+from pybop_diffsol import DiffsolDense, DiffsolSparse, Config
 import numpy as np
 
 import pytest
 
 solver_classes = [
     DiffsolDense,
-    #DiffsolSparse,
+    DiffsolSparse,
 ]
+
 
 @pytest.mark.parametrize("solver_class", solver_classes)
 def test_solve(solver_class):
@@ -18,7 +19,7 @@ def test_solve(solver_class):
         u_i { y = 0.1 }
         F_i { (r * y) * (1 - (y / k)) }
         """,
-        config
+        config,
     )
     times = np.linspace(0.0, 1.0, 100)
     k = 1.0

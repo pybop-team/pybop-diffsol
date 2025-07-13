@@ -119,12 +119,16 @@ create_diffsol_class!(
     diffsol::NalgebraMat<f64>,
     diffsol::NalgebraLU<f64>
 );
-//create_diffsol_class!(DiffsolSparse, diffsol::FaerSparseMat<f64>, diffsol::FaerSparseLU<f64>);
+create_diffsol_class!(
+    DiffsolSparse,
+    diffsol::FaerSparseMat<f64>,
+    diffsol::FaerSparseLU<f64>
+);
 
 #[pymodule]
 fn pybop_diffsol(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DiffsolDense>()?;
-    //m.add_class::<DiffsolSparse>()?;
+    m.add_class::<DiffsolSparse>()?;
     m.add_class::<Config>()?;
     m.add_class::<CostType>()?;
     Ok(())
