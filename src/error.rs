@@ -1,6 +1,7 @@
 use diffsol::error::DiffsolError;
 use pyo3::{exceptions::PyValueError, PyErr};
 
+#[derive(Debug)]
 pub(crate) struct PyDiffsolError(DiffsolError);
 
 impl PyDiffsolError {
