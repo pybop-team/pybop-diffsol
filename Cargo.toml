@@ -17,7 +17,7 @@ diffsol-cranelift = ["diffsol/diffsl-cranelift"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-diffsol = { version = "0.6.5" }
+diffsol = { version = "0.6.6" }
 faer = "0.22.6"
 nalgebra = "0.33.2"
 numpy = "0.25.0"
