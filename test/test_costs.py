@@ -89,16 +89,7 @@ sens_expected = [
     / (n * np.sqrt(np.mean((soln_dp - soln_orig) ** 2))),  # RootMeanSquaredError
 ]
 
-solver_cost_type_and_expected = [
-    (cls, cost_name, cost, expected)
-    for cls in solver_classes
-    for (cost_name, cost), expected in zip(cost_name_and_type, cost_expected)
-]
-solver_sens_type_and_expected = [
-    (cls, cost_name, cost, expected)
-    for cls in solver_classes
-    for (cost_name, cost), expected in zip(cost_name_and_type, sens_expected)
-]
+
 
 
 # def test_sens_calculation():
@@ -109,18 +100,42 @@ solver_sens_type_and_expected = [
 #    np.testing.assert_allclose(dr, fd_dr, rtol=1e-5)
 #    np.testing.assert_allclose(dk, fd_dk, rtol=1e-5)
 
-model_str = """
-in = [r, k]
-r { 1 } k { 1 }
-u_i { y = 0.1 }
-F_i { (r * y) * (1 - (y / k)) }
-"""
+model_strs = [
+    """
+    in = [r, k]
+    r { 1 } k { 1 }
+    u_i { y = 0.1 }
+    F_i { (r * y) * (1 - (y / k)) }
+    """,
+    """
+    in = [r, k]
+    r { 1 } k { 1 }
+    u_i { y = 0.1 }
+    F_i { (r * y) * (1 - (y / k)) }
+    out { y }
+    """,
+]
+
+solver_cost_type_and_expected = [
+    (cls, cost_name, cost, expected, model_str)
+    for cls in solver_classes
+    for (cost_name, cost), expected in zip(cost_name_and_type, cost_expected)
+    for model_str in model_strs
+]
+solver_sens_type_and_expected = [
+    (cls, cost_name, cost, expected, model_str)
+    for cls in solver_classes
+    for (cost_name, cost), expected in zip(cost_name_and_type, sens_expected)
+    for model_str in model_strs
+]
+
+
 
 
 @pytest.mark.parametrize(
-    "solver_class, cost_name, cost_type, expected", solver_cost_type_and_expected
+    "solver_class, cost_name, cost_type, expected, model_str", solver_cost_type_and_expected
 )
-def test_costs(solver_class, cost_name, cost_type, expected):
+def test_costs(solver_class, cost_name, cost_type, expected, model_str):
     config = Config()
     model = solver_class(model_str, config)
 
@@ -147,9 +162,9 @@ def test_costs(solver_class, cost_name, cost_type, expected):
     sys.platform == "win32", reason="Sensitivity analysis not supported on Windows"
 )
 @pytest.mark.parametrize(
-    "solver_class, cost_name, cost_type, expected", solver_sens_type_and_expected
+    "solver_class, cost_name, cost_type, expected, model_str", solver_sens_type_and_expected
 )
-def test_sens(solver_class, cost_name, cost_type, expected):
+def test_sens(solver_class, cost_name, cost_type, expected, model_str):
     config = Config()
     config.rtol = 1e-10
     config.atol = 1e-10

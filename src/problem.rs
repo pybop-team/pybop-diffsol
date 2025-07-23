@@ -361,6 +361,7 @@ where
         let mut tmp = if problem.eqn.out().is_some() {
             Some((
                 M::V::zeros(nout, problem.context().clone()),
+                M::V::zeros(nout, problem.context().clone()),
                 M::V::zeros(nparams, problem.context().clone()),
             ))
         } else {
@@ -372,15 +373,23 @@ where
             }
             let y = solver.interpolate(t)?;
             let y_sens = solver.interpolate_sens(t)?;
-            for (stmp, ys) in sens_tmp.as_mut_slice().iter_mut().zip(y_sens.iter()) {
-                *stmp = ys[0];
-            }
+            
             let (out_value, out_sens) = if let Some(out) = problem.eqn.out() {
-                let (y_tmp, sens_tmp2) = tmp.as_mut().unwrap();
+                let (y_tmp, s_tmp, sens_tmp2) = tmp.as_mut().unwrap();
                 out.call_inplace(&y, t, y_tmp);
-                out.sens_mul_inplace(&y, t, &sens_tmp, sens_tmp2);
+                // TODO: just calculate the sens jacobian once at the start and then use this rather than the loop
+                for (i, ys) in y_sens.iter().enumerate() {
+                    sens_tmp[i] = ys[0];
+                    out.sens_mul_inplace(&y, t, &sens_tmp, s_tmp);
+                    println!("sens_tmp: {:?} s_tmp: {:?}", sens_tmp, s_tmp);
+                    sens_tmp[i] = 0.0;
+                    sens_tmp2[i] = s_tmp[0];
+                }
                 (y_tmp[0], &*sens_tmp2)
             } else {
+                for (stmp, ys) in sens_tmp.as_mut_slice().iter_mut().zip(y_sens.iter()) {
+                    *stmp = ys[0];
+                }
                 (y[0], &sens_tmp)
             };
             cost += f(out_value, d);
