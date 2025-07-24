@@ -118,13 +118,27 @@ jobs:
         with:
           version: "17.0"
       - name: Build wheels
-        uses: joerick/cibuildwheel@v1.10.0
-        env:
-          CIBW_ARCHS_MACOS: ${{ matrix.vers }}
-          MATURIN_PEP517_ARGS: "--features diffsol-llvm17 --features extension-module"
-          SCCACHE_VERSION: 0.2.13
-          CIBW_BUILD_VERBOSITY: "1" # Make some more noise so that travis doesn't stall
-          CIBW_ENVIRONMENT: 'PATH="$PATH:$HOME/.cargo/bin"'
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist --find-interpreter --features diffsol-llvm17 --features extension-module
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      - name: Fix dist rpath
+        run: |
+          # Resolve dynamic linkage issues by patching rpath and copying dylibs
+          cd dist
+          WHEEL_FILE=$(find . -name "pydiffsol*.whl" -exec basename {} \;)
+          unzip $WHEEL_FILE -d wheel_fix_rpath
+          cp $LLVM_PATH/lib/libunwind.1.dylib wheel_fix_rpath/pydiffsol
+          cp /opt/homebrew/opt/zstd/lib/libzstd.1.dylib wheel_fix_rpath/pydiffsol
+          SO_FILE=$(find wheel_fix_rpath -name "*.so")
+          install_name_tool -change @rpath/libc++.1.dylib /usr/lib/libc++.1.dylib $SO_FILE
+          install_name_tool -change @rpath/libunwind.1.dylib @loader_path/libunwind.1.dylib $SO_FILE
+          install_name_tool -change /opt/homebrew/opt/zstd/lib/libzstd.1.dylib @loader_path/libzstd.1.dylib $SO_FILE
+          cd wheel_fix_rpath
+          zip -r ../$WHEEL_FILE .
+          cd ..
+          rm -rf wheel_fix_rpath
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
