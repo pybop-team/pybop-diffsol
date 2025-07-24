@@ -27,3 +27,17 @@ To build the bindings, run the following command in the root directory of the pr
 ```bash
 LLVM_DIR=/usr/lib/llvm-17  LLVM_SYS_170_PREFIX=/usr/lib/llvm-17 maturin develop --features diffsol-llvm17
 ```
+
+### Building a wheel
+
+To build a wheel, you can use the following command:
+
+```bash
+LLVM_DIR=/usr/lib/llvm-17  LLVM_SYS_170_PREFIX=/usr/lib/llvm-17 maturin build --release --out dist --features diffsol-llvm17
+```
+
+Or via `pip`:
+
+```bash
+MATURIN_PEP517_ARGS="--features diffsol-llvm17" pip wheel .
+```

@@ -1592,6 +1592,9 @@ version = "0.1.1"
 dependencies = [
  "diffsol",
  "faer",
+ "llvm-sys 150.2.1",
+ "llvm-sys 160.2.1",
+ "llvm-sys 170.2.0",
  "nalgebra",
  "numpy",
  "pyo3",
