@@ -121,7 +121,7 @@ jobs:
         uses: joerick/cibuildwheel@v1.10.0
         env:
           CIBW_ARCHS_MACOS: ${{ matrix.vers }}
-          MATURIN_PEP517_ARGS: "--features diffsol-llvm17"
+          MATURIN_PEP517_ARGS: "--features diffsol-llvm17 --features extension-module"
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
