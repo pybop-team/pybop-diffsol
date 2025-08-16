@@ -22,7 +22,7 @@ where
     M::V: VectorHost,
 {
     problem: Arc<Mutex<OdeSolverProblem<DiffSl<M, CG>>>>,
-    sigma: Option<f64>,
+    pub(crate) sigma: Option<f64>,
 }
 
 impl<M> Diffsol<M>
@@ -59,74 +59,40 @@ where
         Ok(())
     }
 
-    pub(crate) fn cost_negative_gaussian_log_likelihood<'py, LS: LinearSolver<M>>(
-        &mut self,
-        _py: Python<'py>,
-        times: PyReadonlyArray1<'py, f64>,
-        data: PyReadonlyArray1<'py, f64>,
-    ) -> Result<f64, PyDiffsolError> {
-        let sigma = self.sigma.ok_or_else(|| {
-            PyDiffsolError::new(DiffsolError::Other(
-                "Sigma must be set before computing cost".to_string(),
-            ))
-        })?;
-        let f = |out: f64, d: f64| (out - d).powi(2);
-        let cost = self.cost::<LS, _>(_py, times, data, f)?;
-        Ok(-0.5 * (2.0 * std::f64::consts::PI).ln() - sigma.ln() - 0.5 * cost / (sigma * sigma))
+    pub(crate) fn cost_negative_gaussian_log_likelihood_fn(out: f64, d: f64) -> f64 {
+        (out - d).powi(2)
     }
-    pub(crate) fn cost_negative_gaussian_log_likelihood_sens<'py, LS: LinearSolver<M>>(
-        &mut self,
-        _py: Python<'py>,
-        times: PyReadonlyArray1<'py, f64>,
-        data: PyReadonlyArray1<'py, f64>,
-    ) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
-        let sigma = self.sigma.ok_or_else(|| {
-            PyDiffsolError::new(DiffsolError::Other(
-                "Sigma must be set before computing cost".to_string(),
-            ))
-        })?;
-        let f = |out: f64, d: f64| (out - d).powi(2);
-        let (cost, sens) =
-            self.cost_sens::<LS, _, _>(_py, times, data, f, |out, d, out_sens, sens| {
-                for (s, &os) in sens.iter_mut().zip(out_sens.as_slice().iter()) {
-                    *s += 2.0 * (out - d) * os;
-                }
-            })?;
-        let cost =
-            -0.5 * (2.0 * std::f64::consts::PI).ln() - sigma.ln() - cost / (2.0 * sigma * sigma);
-        unsafe { sens.as_array_mut() }
-            .iter_mut()
-            .for_each(|s| *s /= -2.0 * sigma * sigma);
-        Ok((cost, sens))
+
+    pub(crate) fn cost_negative_gaussian_log_likelihood_post_fn(cost: f64, sigma: f64) -> f64 {
+        -0.5 * (2.0 * std::f64::consts::PI).ln() - sigma.ln() - 0.5 * cost / (sigma * sigma)
+    }
+
+    pub(crate) fn cost_negative_gaussian_log_likelihood_sens_fn(out: f64, d: f64, out_sens: &M::V, sens: &mut Array1<f64>) {
+        for (s, &os) in sens.iter_mut().zip(out_sens.as_slice().iter()) {
+            *s += 2.0 * (out - d) * os;
+        }
+    }
+
+    pub(crate) fn cost_negative_gaussian_log_likelihood_post_sens_fn(sens: &mut Array1<f64>, sigma: f64) {
+        sens.iter_mut().for_each(|s| *s /= -2.0 * sigma * sigma);
     }
 
     /// Sum of power cost function: `C(x, y) = sum(|x - y|^p`
-    pub(crate) fn cost_sum_of_power<'py, LS: LinearSolver<M>>(
-        &mut self,
-        _py: Python<'py>,
-        times: PyReadonlyArray1<'py, f64>,
-        data: PyReadonlyArray1<'py, f64>,
-        p: i32,
-    ) -> Result<f64, PyDiffsolError> {
-        let f = |out: f64, d: f64| (out - d).abs().powi(p);
-        self.cost::<LS, _>(_py, times, data, f)
+    pub(crate) fn cost_sum_of_power_fn(out: f64, d: f64, p: i32) -> f64 {
+        (out - d).abs().powi(p)
+    }
+    pub(crate) fn cost_sum_of_power_post_fn(cost: f64, p: i32) -> f64 {
+        cost.powf(1.0 / p as f64)
+    }
+    pub(crate) fn cost_sum_of_power_sens_fn(out: f64, d: f64, out_sens: &M::V, sens: &mut Array1<f64>, p: i32) {
+        for (s, &os) in sens.iter_mut().zip(out_sens.as_slice().iter()) {
+            *s += (p as f64) * (out - d).abs().powi(p - 1) * os;
+        }
+    }
+    pub(crate) fn cost_sum_of_power_post_sens_fn(sens: &mut Array1<f64>, p: i32, cost: f64) {
     }
 
-    pub(crate) fn cost_sum_of_power_sens<'py, LS: LinearSolver<M>>(
-        &mut self,
-        _py: Python<'py>,
-        times: PyReadonlyArray1<'py, f64>,
-        data: PyReadonlyArray1<'py, f64>,
-        p: i32,
-    ) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
-        let f = |out: f64, d: f64| (out - d).abs().powi(p);
-        let fs = |out: f64, d: f64, out_sens: &M::V, sens: &mut Array1<f64>| {
-            for (s, &os) in sens.iter_mut().zip(out_sens.as_slice().iter()) {
-                *s += (p as f64) * (out - d).abs().powi(p - 1) * os;
-            }
-        };
-        self.cost_sens::<LS, _, _>(_py, times, data, f, fs)
-    }
+
 
     /// minkowski cost function: `C(x, y) = (sum(|x - y|^p))^(1/p)`
     pub(crate) fn cost_minkowski<'py, LS: LinearSolver<M>>(
@@ -324,6 +290,55 @@ where
         Ok(cost)
     }
 
+    pub(crate) fn multi_cost<'py, LS: LinearSolver<M>>(
+        &mut self,
+        _py: Python<'py>,
+        times: PyReadonlyArray1<'py, f64>,
+        data: PyReadonlyArray1<'py, f64>,
+        f: Vec<Box<dyn Fn(f64, f64) -> f64>>,
+    ) -> Result<Vec<f64>, PyDiffsolError> {
+        let problem = self
+            .problem
+            .lock()
+            .map_err(|e| PyDiffsolError::new(DiffsolError::Other(e.to_string())))?;
+        let times = times.as_array();
+        let data = data.as_array();
+        let mut solver = problem.bdf::<LS>()?;
+        let nout = if let Some(_out) = problem.eqn.out() {
+            problem.eqn.nout()
+        } else {
+            problem.eqn.nstates()
+        };
+        if nout != 1 {
+            return Err(PyDiffsolError::new(DiffsolError::Other(
+                "Cost function only supports single output equations".to_string(),
+            )));
+        }
+        let mut cost = vec![0.0; f.len()];
+        let mut y_tmp = if problem.eqn.out().is_some() {
+            Some(M::V::zeros(nout, problem.context().clone()))
+        } else {
+            None
+        };
+        for (&t, &d) in times.iter().zip(data.iter()) {
+            while solver.state().t < t {
+                solver.step()?;
+            }
+            let y = solver.interpolate(t)?;
+            let out = if let Some(out) = problem.eqn.out() {
+                let y_tmp = y_tmp.as_mut().unwrap();
+                out.call_inplace(&y, t, y_tmp);
+                y_tmp[0]
+            } else {
+                y[0]
+            };
+            for (i, f) in f.iter().enumerate() {
+                cost[i] += f(out, d);
+            }
+        }
+        Ok(cost)
+    }
+
     pub(crate) fn cost_sens<
         'py,
         LS: LinearSolver<M>,
@@ -331,12 +346,11 @@ where
         FS: Fn(f64, f64, &M::V, &mut Array1<f64>),
     >(
         &mut self,
-        py: Python<'py>,
         times: PyReadonlyArray1<'py, f64>,
         data: PyReadonlyArray1<'py, f64>,
         f: F,
         fs: FS,
-    ) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
+    ) -> Result<(f64, Array1<f64>), PyDiffsolError> {
         let problem = self
             .problem
             .lock()
@@ -385,6 +399,72 @@ where
             };
             cost += f(out_value, d);
             fs(out_value, d, out_sens, &mut sens);
+        }
+        Ok((cost, sens))
+    }
+
+    pub(crate) fn multi_cost_sens<
+        'py,
+        LS: LinearSolver<M>,
+    >(
+        &mut self,
+        py: Python<'py>,
+        times: PyReadonlyArray1<'py, f64>,
+        data: PyReadonlyArray1<'py, f64>,
+        f: Vec<(Box<dyn Fn(f64, f64) -> f64>, M::T)>,
+        fs: Vec<Box<dyn Fn(f64, f64, &M::V, f64, &mut Array1<f64>)>>,
+    ) -> Result<(f64, Bound<'py, PyArray1<f64>>), PyDiffsolError> {
+        assert!(f.len() == fs.len());
+        let problem = self
+            .problem
+            .lock()
+            .map_err(|e| PyDiffsolError::new(DiffsolError::Other(e.to_string())))?;
+        let times = times.as_array();
+        let data = data.as_array();
+        let mut solver = problem.bdf_sens::<LS>()?;
+        let nout = if let Some(_out) = problem.eqn.out() {
+            problem.eqn.nout()
+        } else {
+            problem.eqn.nstates()
+        };
+        let nparams = problem.eqn.nparams();
+        if nout != 1 {
+            return Err(PyDiffsolError::new(DiffsolError::Other(
+                "Cost function only supports single output equations".to_string(),
+            )));
+        }
+        let mut cost = 0.0;
+        let mut sens = Array1::zeros(nparams);
+        let mut sens_tmp = M::V::zeros(nparams, problem.context().clone());
+        let mut tmp = if problem.eqn.out().is_some() {
+            Some((
+                M::V::zeros(nout, problem.context().clone()),
+                M::V::zeros(nparams, problem.context().clone()),
+            ))
+        } else {
+            None
+        };
+        for (&t, &d) in times.iter().zip(data.iter()) {
+            while solver.state().t < t {
+                solver.step()?;
+            }
+            let y = solver.interpolate(t)?;
+            let y_sens = solver.interpolate_sens(t)?;
+            for (stmp, ys) in sens_tmp.as_mut_slice().iter_mut().zip(y_sens.iter()) {
+                *stmp = ys[0];
+            }
+            let (out_value, out_sens) = if let Some(out) = problem.eqn.out() {
+                let (y_tmp, sens_tmp2) = tmp.as_mut().unwrap();
+                out.call_inplace(&y, t, y_tmp);
+                out.sens_mul_inplace(&y, t, &sens_tmp, sens_tmp2);
+                (y_tmp[0], &*sens_tmp2)
+            } else {
+                (y[0], &sens_tmp)
+            };
+            for ((f, w), fs) in f.iter().zip(fs.iter()) {
+                cost += w * f(out_value, d);
+                fs(out_value, d, out_sens, *w, &mut sens);
+            }
         }
         Ok((cost, sens.into_pyarray(py)))
     }

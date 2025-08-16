@@ -7,6 +7,7 @@ pub(crate) use config::Config;
 pub(crate) use cost_type::CostType;
 pub(crate) use error::PyDiffsolError;
 pub(crate) use problem::Diffsol;
+pub(crate) use problem::DiffsolError;
 
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1};
 use pyo3::prelude::*;
@@ -42,12 +43,27 @@ macro_rules! create_diffsol_class {
                 cost_type: &CostType,
             ) -> Result<f64, PyDiffsolError> {
                 match cost_type {
-                    CostType::NegativeGaussianLogLikelihood() => self
+                    CostType::NegativeGaussianLogLikelihood() => {
+                        let cost = self
                         .0
-                        .cost_negative_gaussian_log_likelihood::<$linear_solver>(py, times, data),
-                    CostType::SumOfPower(p) => self
+                        .cost::<$linear_solver, _>(py, times, data, |out, d| {
+                            Diffsol::cost_negative_gaussian_log_likelihood_fn(out, d)
+                        })?;
+                        let sigma = self.0.sigma.ok_or_else(|| {
+                            PyDiffsolError::new(DiffsolError::Other(
+                                "Sigma must be set before computing cost".to_string(),
+                            ))
+                        })?;
+                        Ok(Diffsol::cost_negative_gaussian_log_likelihood_post_fn(cost, sigma))
+                    }
+                    CostType::SumOfPower(p) => {
+                        let cost = self
                         .0
-                        .cost_sum_of_power::<$linear_solver>(py, times, data, *p),
+                        .cost::<$linear_solver, _>(py, times, data, |out, d| {
+                            Diffsol::cost_sum_of_power_fn(out, d, *p)
+                        })?;
+                        Ok(Diffsol::cost_sum_of_power_post_fn(cost, *p))
+                    }
                     CostType::Minkowski(p) => {
                         self.0.cost_minkowski::<$linear_solver>(py, times, data, *p)
                     }
